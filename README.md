@@ -107,16 +107,6 @@ The project is divided into four milestones. Each milestone has a clear delivera
  
 ---
  
-## Getting Started
- 
-*This section will be filled in as the project progresses.*
- 
-For now, clone the repository and check the `/hardware` and `/firmware` folders.
- 
-```bash
-git clone https://github.com/YOUR_USERNAME/lean-angle-sensor.git
-cd lean-angle-sensor
-```
  
 ### Required Libraries (Arduino)
  
