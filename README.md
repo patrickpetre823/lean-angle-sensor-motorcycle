@@ -1,4 +1,4 @@
-# 🏍️ Motorcycle Lean Angle Sensor
+# Motorcycle Lean Angle Sensor
  
 A DIY project to measure and record the lean angle of a motorcycle in real time — and send the data to a smartphone for post-ride analysis.
  
@@ -58,7 +58,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
  
 ---
  
-### Milestone 1 — Sensor Works ✅ *(Hardware & Basic Firmware)*
+### Milestone 1 — Sensor Works *(Hardware & Basic Firmware)*
  
 **Goal:** Read lean angle data from the BNO085 and display it in the Serial Monitor.
  
@@ -71,7 +71,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
  
 ---
  
-### Milestone 2 — Data via Bluetooth 📡 *(BLE Communication)*
+### Milestone 2 — Data via Bluetooth *(BLE Communication)*
  
 **Goal:** Send the lean angle data from the Arduino to a smartphone in real time.
  
