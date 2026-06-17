@@ -6,6 +6,7 @@
 
 #include <Wire.h>
 #include <Adafruit_BNO08x.h>
+#include <ArduinoBLE.h>
 
 #define BNO08X_RESET -1   // RST nicht verkabelt? -1 lassen
                            // Wenn D3 an RST: #define BNO08X_RESET 3
@@ -13,6 +14,19 @@
 Adafruit_BNO08x bno08x(BNO08X_RESET);
 sh2_SensorValue_t sensorValue;
 
+BLEService sensorService("19b10000-e8f2-537e-4f6c-d104768a1214");
+
+BLECharacteristic orientCharacteristic(
+  "19b10001-e8f2-537e-4f6c-d104768a1214",
+  BLENotify,    // Handy bekommt automatisch jedes Update
+  20            // max. Paketgröße in Bytes
+);
+
+BLECharacteristic accelCharacteristic(
+  "19b10002-e8f2-537e-4f6c-d104768a1214",
+  BLENotify,
+  20
+);
 
 float qr = 1.0, qi = 0.0, qj = 0.0, qk = 0.0;
 
@@ -71,6 +85,31 @@ void setup() {
     Serial.println("FEHLER: Linear Acceleration Report konnte nicht aktiviert werden.");
     while (1) delay(10);
   }
+
+
+  // ===================== NEU: BLE Setup =====================
+  // Startet den Bluetooth-Stack auf dem Arduino
+  if (!BLE.begin()) {
+    Serial.println("FEHLER: BLE konnte nicht gestartet werden.");
+    while (1) delay(10);
+  }
+
+  // Name unter dem der Arduino im Scan der App erscheint
+  BLE.setLocalName("MotoLeanSensor");
+  BLE.setAdvertisedService(sensorService);
+
+  // Beide Charakteristiken dem Service zuordnen
+  sensorService.addCharacteristic(orientCharacteristic);
+  sensorService.addCharacteristic(accelCharacteristic);
+  BLE.addService(sensorService);
+
+  // Arduino ab jetzt für Scans sichtbar machen
+  BLE.advertise();
+
+  Serial.println("BLE aktiv. Warte auf Verbindung vom Handy...");
+  // ================== ENDE NEU: BLE Setup ====================
+
+
   // Warten bis Sensor stabile Werte liefert, dann automatisch kalibrieren
   Serial.println("Kalibrierung in 10 Sekunden — Motorrad gerade hinstellen...");
 
@@ -97,6 +136,12 @@ void setup() {
 // ----------------------------------------------------------
 void loop() {
   
+  // ============ NEU: prüfen ob ein Handy verbunden ist ============
+  // Nicht zwingend nötig zum Senden, aber so weiß der Arduino
+  // ob gerade eine BLE-Verbindung aktiv ist (für späteres Debugging nützlich)
+  BLEDevice central = BLE.central();
+  // ========================== ENDE NEU =============================
+
   if (!bno08x.getSensorEvent(&sensorValue)) return;
 
   // Rotation
@@ -113,7 +158,7 @@ void loop() {
     //float pitch = asin (2*(qr*qj - qk*qi))                          * 180.0 / PI;
     //float yaw   = atan2(2*(qr*qk + qi*qj), 1 - 2*(qj*qj + qk*qk)) * 180.0 / PI;
 
-    // NEU: Wenn kalibriert, erst relatives Quaternion berechnen
+    // Wenn kalibriert, erst relatives Quaternion berechnen
     float rr, ri, rj, rk;
     if (calibrated) {
       // q_relativ = q_ref⁻¹ ⊗ q_aktuell
@@ -140,6 +185,15 @@ void loop() {
     Serial.print(pitch, 1);
     Serial.print("°  |  Yaw: ");
     Serial.print(yaw, 1);
+    
+    // ===================== NEU: per BLE senden =====================
+    // String im Format "roll,pitch,yaw" bauen, z.B. "32.4,-1.2,143.8"
+    // Das ist exakt das Format, das die Flutter-App mit .split(',') erwartet
+    char orientBuf[20];
+    snprintf(orientBuf, sizeof(orientBuf), "%.1f,%.1f,%.1f", roll, pitch, yaw);
+    orientCharacteristic.writeValue(orientBuf);
+    // ========================== ENDE NEU ============================
+  
   }
 
   // Accelaration
@@ -160,5 +214,12 @@ void loop() {
     Serial.print("Accel Welt:    X="); Serial.print(ax_welt, 2);
     Serial.print("  Y="); Serial.print(ay_welt, 2);
     Serial.print("  Z="); Serial.println(az_welt, 2);
+
+    // ===================== NEU: per BLE senden =====================
+    // String im Format "x,y,z", z.B. "0.34,-0.12,9.81"
+    char accelBuf[20];
+    snprintf(accelBuf, sizeof(accelBuf), "%.2f,%.2f,%.2f", ax_welt, ay_welt, az_welt);
+    accelCharacteristic.writeValue(accelBuf);
+    // ========================== ENDE NEU ============================
   }
 }
