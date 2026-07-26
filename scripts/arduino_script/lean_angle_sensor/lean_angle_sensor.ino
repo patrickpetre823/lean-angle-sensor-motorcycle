@@ -62,7 +62,7 @@ void quatToEuler(float qr, float qi, float qj, float qk,
 // ----------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  while (!Serial) delay(10);   // warten bis Serial Monitor offen ist
+  delay(100);   // warten bis Serial Monitor offen ist
 
   Serial.println("=== Moto Lean Angle Sensor ===");
   Serial.println("Befehle: 'C' = Kalibrieren  |  'R' = Reset");
@@ -77,7 +77,7 @@ void setup() {
   Serial.println("BNO085 gefunden!");
 
   // Rotation Vector aktivieren (gibt stabile Quaternionen aus)
-  if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 10000)) { // 10ms = 100Hz
+  if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 12500)) { // 10ms = 100Hz
     Serial.println("FEHLER: Rotation Vector Report konnte nicht aktiviert werden.");
     while (1) delay(10);
   }
@@ -139,9 +139,10 @@ void loop() {
   // ============ NEU: prüfen ob ein Handy verbunden ist ============
   // Nicht zwingend nötig zum Senden, aber so weiß der Arduino
   // ob gerade eine BLE-Verbindung aktiv ist (für späteres Debugging nützlich)
-  BLEDevice central = BLE.central();
+  // deaktiviert um latenz zu verbessern -> stattdessen BLE.poll()
+  // BLEDevice central = BLE.central();
   // ========================== ENDE NEU =============================
-
+  BLE.poll();
   if (!bno08x.getSensorEvent(&sensorValue)) return;
 
   // Rotation
