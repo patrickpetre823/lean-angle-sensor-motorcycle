@@ -72,7 +72,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 ---
  
 ![alt text](https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Logo Title Text 1")
-![alt text](https://github.com/patrickpetre823/lean-angle-sensor-motorcycle/tree/main/docs/sensorboard.jpeg)
+![alt text](https://github.com/patrickpetre823/lean-angle-sensor-motorcycle/tree/main/docs/sensorboard.jpeg "Sensor Board")
 ---
 
 ### Milestone 2 — Flutter App & BLE *(Mobile App & Bluetooth)*
