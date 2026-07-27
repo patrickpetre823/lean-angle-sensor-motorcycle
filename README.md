@@ -70,7 +70,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 **Done when:** The Serial Monitor shows a stable, correct lean angle when the sensor is tilted by hand.
  
 ---
- ![Alt text](docs/sensorboard.png)
+<img src="docs/sensorboard.png" width="360">
 ---
 
 ### Milestone 2 — Flutter App & BLE *(Mobile App & Bluetooth)*
@@ -84,10 +84,10 @@ The project is divided into four milestones. Each milestone has a clear delivera
 
 **Done when:** The Flutter app connects to the Arduino and shows all sensor values updating live.
 
-<img src="docs/menu1.png" width="80">
-<img src="docs/menu2.png" width="80">
+<img src="docs/menu1.png" width="360">
+<img src="docs/menu2.png" width="360">
+<img src="docs/menu3.png" width="360">
 
-![Alt text](docs/menu3.png)
 ---
 
 ### Milestone 3 — Data Logging 💾 *(Recording & Storage)*
