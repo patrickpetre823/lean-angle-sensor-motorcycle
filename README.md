@@ -58,7 +58,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
  
 ---
  
-### Milestone 1 — Sensor Works *(Hardware & Basic Firmware)*
+### Milestone 1 — Sensor Works *(Hardware & Basic Firmware)* -> DONE
  
 **Goal:** Read lean angle data from the BNO085 and display it in the Serial Monitor.
  
@@ -73,7 +73,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 <img src="docs/sensorboard.png" width="360">
 ---
 
-### Milestone 2 — Flutter App & BLE *(Mobile App & Bluetooth)*
+### Milestone 2 — Flutter App & BLE *(Mobile App & Bluetooth)* -> DONE
 
 **Goal:** Build a Flutter Android app that connects to the Arduino via BLE and displays live sensor data.
 
@@ -84,9 +84,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 
 **Done when:** The Flutter app connects to the Arduino and shows all sensor values updating live.
 
-<img src="docs/menu1.png" width="360">
-<img src="docs/menu2.png" width="360">
-<img src="docs/menu3.png" width="360">
+
 
 ---
 
@@ -101,6 +99,14 @@ The project is divided into four milestones. Each milestone has a clear delivera
 - Test recording during a short test ride
 
 **Done when:** After a ride, a complete session log is stored on the phone and exportable as CSV.
+
+## Current Menu:
+<img src="docs/menu1.png" width="360">
+<img src="docs/menu2.png" width="360">
+<img src="docs/menu3.png" width="360">
+
+
+Currently working on this. Database is already implemented. Still needs work on visualization, data export etc.
 
 ---
 
