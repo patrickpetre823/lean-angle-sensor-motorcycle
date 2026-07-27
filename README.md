@@ -84,7 +84,8 @@ The project is divided into four milestones. Each milestone has a clear delivera
 
 **Done when:** The Flutter app connects to the Arduino and shows all sensor values updating live.
 ![Alt text](docs/menu1.png) 
-![Alt text](docs/menu2.png =360x800)
+<img src="docs/menu1.png" width="48">
+![Alt text](docs/menu2.png)
 
 ![Alt text](docs/menu3.png)
 ---
