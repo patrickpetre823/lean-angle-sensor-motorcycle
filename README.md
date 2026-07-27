@@ -70,9 +70,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 **Done when:** The Serial Monitor shows a stable, correct lean angle when the sensor is tilted by hand.
  
 ---
- 
-
-![alt text](https://github.com/patrickpetre823/lean-angle-sensor-motorcycle/tree/main/docs/menu1.png "Sensor Board")
+ ![Alt text](docs/sensorboard.png)
 ---
 
 ### Milestone 2 — Flutter App & BLE *(Mobile App & Bluetooth)*
@@ -86,7 +84,8 @@ The project is divided into four milestones. Each milestone has a clear delivera
 
 **Done when:** The Flutter app connects to the Arduino and shows all sensor values updating live.
 ![Alt text](docs/menu1.png)
-
+![Alt text](docs/menu2.png)
+![Alt text](docs/menu3.png)
 ---
 
 ### Milestone 3 — Data Logging 💾 *(Recording & Storage)*
