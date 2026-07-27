@@ -85,6 +85,7 @@ The project is divided into four milestones. Each milestone has a clear delivera
 - Verify stable real-time data transfer
 
 **Done when:** The Flutter app connects to the Arduino and shows all sensor values updating live.
+![Alt text](docs/menu1.png)
 
 ---
 
