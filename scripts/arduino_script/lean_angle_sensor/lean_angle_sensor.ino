@@ -65,6 +65,13 @@ void quatToEuler(float qr, float qi, float qj, float qk,
   yaw = atan2(2 * (qr * qk + qi * qj), 1 - 2 * (qj * qj + qk * qk)) * 180.0 / PI;
 }
 
+// NEU: globale Variablen für letzten bekannten Messwert -> Damit kann messpunkte ausserhalb der schleife
+float g_roll = 0, g_pitch = 0, g_yaw = 0;
+float g_ax = 0, g_ay = 0, g_az = 0;
+
+unsigned long lastSerial = 0;  // NEU
+unsigned long lastBLE    = 0;  // NEU
+
 // ----------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -83,14 +90,14 @@ void setup() {
   Serial.println("BNO085 gefunden!");
 
   // Rotation Vector aktivieren (gibt stabile Quaternionen aus)
-  if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 12500)) {  // 10ms = 100Hz
+  if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 10000)) {  // 10ms = 100Hz
     Serial.println("FEHLER: Rotation Vector Report konnte nicht aktiviert werden.");
     while (1) delay(10);
   }
-  //if (!bno08x.enableReport(SH2_LINEAR_ACCELERATION, 10000)) {
-  //  Serial.println("FEHLER: Linear Acceleration Report konnte nicht aktiviert werden.");
-  //  while (1) delay(10);
-  //}
+  if (!bno08x.enableReport(SH2_LINEAR_ACCELERATION, 50000)) {  // 20 Hz -> blockiert sonst aufwändigeren rotation vector 
+    Serial.println("FEHLER: Linear Acceleration Report konnte nicht aktiviert werden.");
+    while (1) delay(10);
+  }
 
 
   // ===================== NEU: BLE Setup =====================
@@ -140,123 +147,81 @@ void setup() {
 
 // ----------------------------------------------------------
 void loop() {
-
-  // ============ NEU: prüfen ob ein Handy verbunden ist ============
-  // Nicht zwingend nötig zum Senden, aber so weiß der Arduino
-  // ob gerade eine BLE-Verbindung aktiv ist (für späteres Debugging nützlich)
-  // deaktiviert um latenz zu verbessern -> stattdessen BLE.poll()
-  // BLEDevice central = BLE.central();
-  // ========================== ENDE NEU =============================
   BLE.poll(0);
+
+  // --- schnelle Lese-Schleife: nur Mathe, kein Serial, kein BLE ---
   while (bno08x.getSensorEvent(&sensorValue)) {
 
-    // Rotation
     if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
       countRotVec++;
-      // Quaternion auslesen
       qr = sensorValue.un.rotationVector.real;
       qi = sensorValue.un.rotationVector.i;
       qj = sensorValue.un.rotationVector.j;
       qk = sensorValue.un.rotationVector.k;
 
-      // Quaternion → Euler-Winkel (Grad)
-      //float roll  = atan2(2*(qr*qi + qj*qk), 1 - 2*(qi*qi + qj*qj)) * 180.0 / PI;
-      //float pitch = asin (2*(qr*qj - qk*qi))                          * 180.0 / PI;
-      //float yaw   = atan2(2*(qr*qk + qi*qj), 1 - 2*(qj*qj + qk*qk)) * 180.0 / PI;
-
-      // Wenn kalibriert, erst relatives Quaternion berechnen
       float rr, ri, rj, rk;
       if (calibrated) {
-        // q_relativ = q_ref⁻¹ ⊗ q_aktuell
-        // Das Inverse = Konjugiertes: i/j/k-Anteile des Referenz-Quaternions negieren
-        rr = ref_qr * qr + ref_qi * qi + ref_qj * qj + ref_qk * qk;
-        ri = ref_qr * qi - ref_qi * qr - ref_qj * qk + ref_qk * qj;
-        rj = ref_qr * qj + ref_qi * qk - ref_qj * qr - ref_qk * qi;
-        rk = ref_qr * qk - ref_qi * qj + ref_qj * qi - ref_qk * qr;
+        rr = ref_qr*qr + ref_qi*qi + ref_qj*qj + ref_qk*qk;
+        ri = ref_qr*qi - ref_qi*qr - ref_qj*qk + ref_qk*qj;
+        rj = ref_qr*qj + ref_qi*qk - ref_qj*qr - ref_qk*qi;
+        rk = ref_qr*qk - ref_qi*qj + ref_qj*qi - ref_qk*qr;
       } else {
-        // Nicht kalibriert: einfach den rohen Quaternion weiterverwenden
-        rr = qr;
-        ri = qi;
-        rj = qj;
-        rk = qk;
+        rr = qr; ri = qi; rj = qj; rk = qk;
       }
 
-      // Euler-Winkel aus rr/ri/rj/rk — egal ob kalibriert oder nicht
-      float roll = atan2(2 * (rr * ri + rj * rk), 1 - 2 * (ri * ri + rj * rj)) * 180.0 / PI;
-      float pitch = asin(2 * (rr * rj - rk * ri)) * 180.0 / PI;
-      float yaw = atan2(2 * (rr * rk + ri * rj), 1 - 2 * (rj * rj + rk * rk)) * 180.0 / PI;
-
-      // Ausgabe
-      Serial.print(calibrated ? "" : "[!] ");  // Nur warnen wenn NICHT kalibriert
-      Serial.print("Roll: ");
-      Serial.print(roll, 1);
-      Serial.print("°  |  Pitch: ");
-      Serial.print(pitch, 1);
-      Serial.print("°  |  Yaw: ");
-      Serial.print(yaw, 1);
-      Serial.println("°");
-
-      unsigned long now = millis();
-      if (now - lastReport >= 1000) {
-        Serial.print("Events/s  →  RotVec: ");
-        Serial.print(countRotVec);
-        Serial.print("  |  Accel: ");
-        Serial.println(countAccel);
-        countRotVec = 0;
-        countAccel = 0;
-        lastReport = now;
-      }
-      // ===================== NEU: per BLE senden =====================
-      // String im Format "roll,pitch,yaw" bauen, z.B. "32.4,-1.2,143.8"
-      // Das ist exakt das Format, das die Flutter-App mit .split(',') erwartet
-      char orientBuf[20];
-      snprintf(orientBuf, sizeof(orientBuf), "%.1f,%.1f,%.1f", roll, pitch, yaw);
-      orientCharacteristic.writeValue(orientBuf);
-      // ========================== ENDE NEU ============================
+      // NEU: Ergebnis in globale Variablen schreiben, nicht ausgeben
+      g_roll  = atan2(2*(rr*ri + rj*rk), 1 - 2*(ri*ri + rj*rj)) * 180.0 / PI;
+      g_pitch = asin (2*(rr*rj - rk*ri))                          * 180.0 / PI;
+      g_yaw   = atan2(2*(rr*rk + ri*rj), 1 - 2*(rj*rj + rk*rk)) * 180.0 / PI;
     }
 
-    // Accelaration
     if (sensorValue.sensorId == SH2_LINEAR_ACCELERATION) {
       countAccel++;
       float ax = sensorValue.un.linearAcceleration.x;
       float ay = sensorValue.un.linearAcceleration.y;
       float az = sensorValue.un.linearAcceleration.z;
 
-      // In Weltkoordinaten rotieren (qr/qi/qj/qk vom letzten Rotation-Vector-Event)
-      float ax_welt = (1 - 2 * (qj * qj + qk * qk)) * ax + 2 * (qi * qj - qr * qk) * ay + 2 * (qi * qk + qr * qj) * az;
-      float ay_welt = 2 * (qi * qj + qr * qk) * ax + (1 - 2 * (qi * qi + qk * qk)) * ay + 2 * (qj * qk - qr * qi) * az;
-      float az_welt = 2 * (qi * qk - qr * qj) * ax + 2 * (qj * qk + qr * qi) * ay + (1 - 2 * (qi * qi + qj * qj)) * az;
-
-      Serial.print("Accel Sensor:  X=");
-      Serial.print(ax, 2);
-      Serial.print("  Y=");
-      Serial.print(ay, 2);
-      Serial.print("  Z=");
-      Serial.println(az, 2);
-
-      Serial.print("Accel Welt:    X=");
-      Serial.print(ax_welt, 2);
-      Serial.print("  Y=");
-      Serial.print(ay_welt, 2);
-      Serial.print("  Z=");
-      Serial.println(az_welt, 2);
-
-      // ===================== NEU: per BLE senden =====================
-      // String im Format "x,y,z", z.B. "0.34,-0.12,9.81"
-      char accelBuf[20];
-      snprintf(accelBuf, sizeof(accelBuf), "%.2f,%.2f,%.2f", ax_welt, ay_welt, az_welt);
-      accelCharacteristic.writeValue(accelBuf);
-      // ========================== ENDE NEU ============================
+      // NEU: Ergebnis in globale Variablen schreiben, nicht ausgeben
+      g_ax = (1-2*(qj*qj+qk*qk))*ax + 2*(qi*qj-qr*qk)*ay + 2*(qi*qk+qr*qj)*az;
+      g_ay = 2*(qi*qj+qr*qk)*ax     + (1-2*(qi*qi+qk*qk))*ay + 2*(qj*qk-qr*qi)*az;
+      g_az = 2*(qi*qk-qr*qj)*ax     + 2*(qj*qk+qr*qi)*ay + (1-2*(qi*qi+qj*qj))*az;
     }
   }
-  static int loopCount = 0;
-  loopCount++;
-  if (loopCount % 500 == 0) {                    // alle 500 Durchläufe
-    Serial.print("RotVec: ");
-    Serial.print(countRotVec);
-    Serial.print("  Accel: ");
-    Serial.println(countAccel);
+
+  // --- gedrosselte Ausgaben außerhalb der while ---
+  unsigned long now = millis();
+
+  // Serial: 10Hz reicht zum Debuggen
+  if (now - lastSerial >= 100) {
+    Serial.print("Roll: ");    Serial.print(g_roll,  1);
+    Serial.print("°  Pitch: "); Serial.print(g_pitch, 1);
+    Serial.print("°  Yaw: ");  Serial.print(g_yaw,   1); Serial.println("°");
+    Serial.print("Accel Welt: X="); Serial.print(g_ax, 2);
+    Serial.print("  Y=");           Serial.print(g_ay, 2);
+    Serial.print("  Z=");           Serial.println(g_az, 2);
+    lastSerial = now;
   }
-  // Test: Sensor Frequenz
-  
+
+  // BLE: 20Hz reicht für die App
+  if (now - lastBLE >= 50) {
+    char orientBuf[20];
+    snprintf(orientBuf, sizeof(orientBuf), "%.1f,%.1f,%.1f", g_roll, g_pitch, g_yaw);
+    orientCharacteristic.writeValue(orientBuf);
+
+    char accelBuf[20];
+    snprintf(accelBuf, sizeof(accelBuf), "%.2f,%.2f,%.2f", g_ax, g_ay, g_az);
+    accelCharacteristic.writeValue(accelBuf);
+    lastBLE = now;
+  }
+
+  // Frequenz-Report: 1x pro Sekunde
+  if (now - lastReport >= 1000) {
+    Serial.print("Events/s  →  RotVec: ");
+    Serial.print(countRotVec);
+    Serial.print("  |  Accel: ");
+    Serial.println(countAccel);
+    countRotVec = 0;
+    countAccel  = 0;
+    lastReport  = now;
+  }
 }
