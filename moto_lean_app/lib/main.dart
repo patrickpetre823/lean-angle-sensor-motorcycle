@@ -177,6 +177,9 @@ class _SensorPageState extends State<SensorPage> {
   static const String serviceUuid = '19b10000-e8f2-537e-4f6c-d104768a1214';
   static const String orientUuid  = '19b10001-e8f2-537e-4f6c-d104768a1214';
   static const String accelUuid   = '19b10002-e8f2-537e-4f6c-d104768a1214';
+  // NEU: UUIDs für Befehl und Status
+  static const String cmdUuid     = '19b10003-e8f2-537e-4f6c-d104768a1214';
+  static const String statusUuid  = '19b10004-e8f2-537e-4f6c-d104768a1214';
 
   double _roll = 0, _pitch = 0, _yaw = 0;
   double _ax = 0, _ay = 0, _az = 0;
@@ -190,6 +193,12 @@ class _SensorPageState extends State<SensorPage> {
   // Stream-Subscriptions — müssen in dispose() gestoppt werden
   StreamSubscription? _orientSub;
   StreamSubscription? _accelSub;
+
+  // NEU: Kalibrierung
+  BluetoothCharacteristic? _cmdChar;      // hier schreiben wir "CAL" hin
+  StreamSubscription? _statusSub;         // hört auf die Antworten vom Arduino
+  Completer<String>? _calCompleter;       // wartet auf CAL_DONE oder CAL_FAIL
+  bool _calibrating = false;              // true solange kalibriert wird
 
   @override
   void initState() {
@@ -246,30 +255,78 @@ class _SensorPageState extends State<SensorPage> {
               }
             });
           }
+
+          // NEU: Befehls-Characteristic merken
+          if (uuid == cmdUuid) {
+            _cmdChar = c;
+          }
+
+          // NEU: Status vom Arduino empfangen
+          if (uuid == statusUuid) {
+            await c.setNotifyValue(true);
+            _statusSub = c.onValueReceived.listen((value) {
+              final s = utf8.decode(value);
+              if ((s == 'CAL_DONE' || s == 'CAL_FAIL') &&
+                  _calCompleter != null &&
+                  !_calCompleter!.isCompleted) {
+                _calCompleter!.complete(s);
+              }
+            });
+          }
         }
       }
     }
   }
 
   void _toggleRecording() async {
+    // Stoppen: wie bisher
     if (_recording) {
       setState(() {
         _recording = false;
         _currentRunId = null;
       });
-    } else {
-      final runId = await _db.createRun();
-      setState(() {
-        _recording = true;
-        _currentRunId = runId;
-      });
+      return;
     }
+
+    // NEU: Starten nur, wenn der Sensor den Befehlskanal hat
+    if (_cmdChar == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sensor nicht bereit (Befehlskanal fehlt)')),
+      );
+      return;
+    }
+
+    // NEU: Kalibrierung starten und auf Antwort warten
+    setState(() => _calibrating = true);
+    _calCompleter = Completer<String>();
+    await _cmdChar!.write(utf8.encode('CAL'));
+    final result = await _calCompleter!.future.timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => 'TIMEOUT',
+    );
+    if (!mounted) return;
+    setState(() => _calibrating = false);
+
+    if (result != 'CAL_DONE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kalibrierung fehlgeschlagen ($result)')),
+      );
+      return;
+    }
+
+    // Kalibrierung ok -> Lauf wie bisher anlegen
+    final runId = await _db.createRun();
+    setState(() {
+      _recording = true;
+      _currentRunId = runId;
+    });
   }
 
   @override
   void dispose() {
     _orientSub?.cancel();
     _accelSub?.cancel();
+    _statusSub?.cancel();   // NEU
     widget.device.disconnect();
     super.dispose();
   }
@@ -341,7 +398,7 @@ class _SensorPageState extends State<SensorPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _recording ? Colors.red : Colors.green,
                 ),
-                onPressed: _toggleRecording,
+                onPressed: _calibrating ? null : _toggleRecording,   // NEU: gesperrt während Kalibrierung
               ),
             ),
 
@@ -356,6 +413,14 @@ class _SensorPageState extends State<SensorPage> {
                   Text('Aufnahme läuft', style: TextStyle(color: Colors.red)),
                 ],
               ),
+            ],
+            // NEU: Anzeige während der Kalibrierung
+            if (_calibrating) ...[
+              const SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 8),
+              const Text('Kalibriere... Motorrad ruhig halten',
+                  style: TextStyle(color: Colors.orange)),
             ],
           ],
         ),

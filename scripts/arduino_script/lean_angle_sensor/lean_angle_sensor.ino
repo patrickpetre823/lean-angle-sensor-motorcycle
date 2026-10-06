@@ -131,7 +131,6 @@ void setup() {
   delay(100);  // warten bis Serial Monitor offen ist
 
   Serial.println("=== Moto Lean Angle Sensor ===");
-  Serial.println("Befehle: 'C' = Kalibrieren  |  'R' = Reset");
   Serial.println("Initialisiere BNO085...");
 
   if (!bno08x.begin_I2C()) {
@@ -178,27 +177,8 @@ void setup() {
   Serial.println("BLE aktiv. Warte auf Verbindung vom Handy...");
   // ================== ENDE NEU: BLE Setup ====================
 
-
-  // Warten bis Sensor stabile Werte liefert, dann automatisch kalibrieren
-  Serial.println("Kalibrierung in 10 Sekunden — Motorrad gerade hinstellen...");
-
-  for (int i = 10; i > 0; i--) {
-    Serial.print(i);
-    Serial.println("...");
-    delay(1000);
-  }
-
-  // Einen frischen Messwert holen und als Nullpunkt speichern
-  while (!bno08x.getSensorEvent(&sensorValue) || sensorValue.sensorId != SH2_ROTATION_VECTOR) {
-    delay(10);
-  }
-  ref_qr = sensorValue.un.rotationVector.real;
-  ref_qi = sensorValue.un.rotationVector.i;
-  ref_qj = sensorValue.un.rotationVector.j;
-  ref_qk = sensorValue.un.rotationVector.k;
-  calibrated = true;
-
-  Serial.println(">>> Nullpunkt gesetzt. Messung laeuft.");
+  // NEU: Kein Auto-Nullpunkt mehr, die App löst die Kalibrierung per Befehl "CAL" aus
+  Serial.println("Bereit. Warte auf Befehl CAL vom Handy.");
 }
 
 // ----------------------------------------------------------
