@@ -34,6 +34,19 @@ BLECharacteristic accelCharacteristic(
   BLENotify,
   20);
 
+// NEU: Befehl vom Handy an den Arduino (z.B. "CAL")
+BLEStringCharacteristic cmdCharacteristic(
+  "19b10003-e8f2-537e-4f6c-d104768a1214",
+  BLEWrite,
+  20);
+
+// NEU: Status vom Arduino ans Handy ("IDLE", "CAL_RUNNING", "CAL_DONE", "CAL_FAIL")
+BLEStringCharacteristic statusCharacteristic(
+  "19b10004-e8f2-537e-4f6c-d104768a1214",
+  BLERead | BLENotify,
+  20);
+
+
 float qr = 1.0, qi = 0.0, qj = 0.0, qk = 0.0;
 
 // Referenz-Quaternion für Kalibrierung (Einbaulage)
@@ -41,6 +54,15 @@ float qr = 1.0, qi = 0.0, qj = 0.0, qk = 0.0;
 float ref_qr = 1.0, ref_qi = 0.0, ref_qj = 0.0, ref_qk = 0.0;
 
 bool calibrated = false;
+
+// NEU: Variablen für die Kalibrierung per Befehl
+bool calibrating = false;
+unsigned long calStart = 0;
+const unsigned long CAL_DURATION_MS = 6000;   // 6 Sekunden still halten
+int calCount = 0;
+float sum_r = 0, sum_i = 0, sum_j = 0, sum_k = 0;
+float first_r = 1, first_i = 0, first_j = 0, first_k = 0;
+
 
 // ----------------------------------------------------------
 // Quaternion-Multiplikation: result = a ⊗ b
@@ -71,6 +93,37 @@ float g_ax = 0, g_ay = 0, g_az = 0;
 
 unsigned long lastSerial = 0;  // NEU
 unsigned long lastBLE    = 0;  // NEU
+
+
+// NEU: Kalibrierung starten
+void startCalibration() {
+  calibrating = true;
+  calStart = millis();
+  calCount = 0;
+  sum_r = sum_i = sum_j = sum_k = 0;
+  statusCharacteristic.writeValue("CAL_RUNNING");
+  Serial.println(">>> Kalibrierung gestartet");
+}
+
+// NEU: Kalibrierung abschließen (Mittelwert der gesammelten Quaternionen)
+void finishCalibration() {
+  calibrating = false;
+  if (calCount < 10) {   // zu wenig Messwerte -> abbrechen
+    statusCharacteristic.writeValue("CAL_FAIL");
+    Serial.println(">>> Kalibrierung fehlgeschlagen (zu wenig Werte)");
+    return;
+  }
+  float n = sqrt(sum_r*sum_r + sum_i*sum_i + sum_j*sum_j + sum_k*sum_k);
+  ref_qr = sum_r / n;
+  ref_qi = sum_i / n;
+  ref_qj = sum_j / n;
+  ref_qk = sum_k / n;
+  calibrated = true;
+  statusCharacteristic.writeValue("CAL_DONE");
+  Serial.print(">>> Kalibrierung fertig, Werte: ");
+  Serial.println(calCount);
+}
+
 
 // ----------------------------------------------------------
 void setup() {
@@ -114,7 +167,10 @@ void setup() {
   // Beide Charakteristiken dem Service zuordnen
   sensorService.addCharacteristic(orientCharacteristic);
   sensorService.addCharacteristic(accelCharacteristic);
+  sensorService.addCharacteristic(cmdCharacteristic);      // NEU -> BLE
+  sensorService.addCharacteristic(statusCharacteristic);   // NEU -> BLE
   BLE.addService(sensorService);
+  statusCharacteristic.writeValue("IDLE");                 // NEU
 
   // Arduino ab jetzt für Scans sichtbar machen
   BLE.advertise();
@@ -148,6 +204,13 @@ void setup() {
 // ----------------------------------------------------------
 void loop() {
   BLE.poll(0);
+  
+  // NEU: Befehl vom Handy prüfen
+  if (cmdCharacteristic.written()) {
+    String cmd = cmdCharacteristic.value();
+    cmd.trim();
+    if (cmd == "CAL" && !calibrating) startCalibration();
+  }
 
   // --- schnelle Lese-Schleife: nur Mathe, kein Serial, kein BLE ---
   while (bno08x.getSensorEvent(&sensorValue)) {
@@ -159,7 +222,20 @@ void loop() {
       qj = sensorValue.un.rotationVector.j;
       qk = sensorValue.un.rotationVector.k;
 
+      // NEU: Werte für die Kalibrierung sammeln
+      if (calibrating) {
+        float sr = qr, si = qi, sj = qj, sk = qk;
+        if (calCount == 0) {
+          first_r = qr; first_i = qi; first_j = qj; first_k = qk;
+        } else if (first_r*qr + first_i*qi + first_j*qj + first_k*qk < 0) {
+          sr = -qr; si = -qi; sj = -qj; sk = -qk;   // q und -q sind dieselbe Drehung
+        }
+        sum_r += sr; sum_i += si; sum_j += sj; sum_k += sk;
+        calCount++;
+      }
+
       float rr, ri, rj, rk;
+
       if (calibrated) {
         rr = ref_qr*qr + ref_qi*qi + ref_qj*qj + ref_qk*qk;
         ri = ref_qr*qi - ref_qi*qr - ref_qj*qk + ref_qk*qj;
@@ -190,6 +266,9 @@ void loop() {
 
   // --- gedrosselte Ausgaben außerhalb der while ---
   unsigned long now = millis();
+
+  // NEU: Kalibrierung nach Ablauf der Zeit abschließen
+  if (calibrating && now - calStart >= CAL_DURATION_MS) finishCalibration();
 
   // Serial: 10Hz reicht zum Debuggen
   if (now - lastSerial >= 100) {
